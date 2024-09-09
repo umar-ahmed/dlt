@@ -565,6 +565,8 @@ sources.sql_database.credentials="mssql+pyodbc://loader:loader@localhost/dlt_dat
 ```
 
 **To fix MS SQL Server connection issues with ConnectorX**:
+Some users have reported issues with MS SQL Server and Connector X. The problems are not caused by `dlt`, but by how connections are made. A big thanks 
+to [Mark-James M](https://github.com/markjamesm) for suggesting a solution.
 
 To fix connection issues with ConnectorX and MS SQL Server, include both `Encrypt=yes` and `encrypt=true` in your connection string:
 ```py
