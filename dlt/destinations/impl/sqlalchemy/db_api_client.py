@@ -3,12 +3,12 @@ from typing import (
     Iterator,
     Any,
     Sequence,
-    ContextManager,
     AnyStr,
     Union,
     Tuple,
     List,
     Dict,
+    Set,
 )
 from contextlib import contextmanager
 from functools import wraps
@@ -19,6 +19,7 @@ import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
 from dlt.common.destination import DestinationCapabilitiesContext
+from dlt.common.destination.reference import PreparedTableSchema
 from dlt.destinations.exceptions import (
     DatabaseUndefinedRelation,
     DatabaseTerminalException,
@@ -141,6 +142,9 @@ class SqlalchemyClient(SqlClientBase[Connection]):
     def dialect_name(self) -> str:
         return self.dialect.name
 
+        # Keep a list of datasets already attached on the current connection
+        self._sqlite_attached_datasets: Set[str] = set()
+
     def open_connection(self) -> Connection:
         if self._current_connection is None:
             self._current_connection = self.engine.connect()
@@ -155,6 +159,7 @@ class SqlalchemyClient(SqlClientBase[Connection]):
                     self._current_connection.close()
                 self.engine.dispose()
             finally:
+                self._sqlite_attached_datasets.clear()
                 self._current_connection = None
                 self._current_transaction = None
 
@@ -234,6 +239,9 @@ class SqlalchemyClient(SqlClientBase[Connection]):
         """Mimic multiple schemas in sqlite using ATTACH DATABASE to
         attach a new database file to the current connection.
         """
+        if dataset_name == "main":
+            # main always exists
+            return
         if self._sqlite_is_memory_db():
             new_db_fn = ":memory:"
         else:
@@ -241,6 +249,7 @@ class SqlalchemyClient(SqlClientBase[Connection]):
 
         statement = "ATTACH DATABASE :fn AS :name"
         self.execute_sql(statement, fn=new_db_fn, name=dataset_name)
+        self._sqlite_attached_datasets.add(dataset_name)
 
     def _sqlite_drop_dataset(self, dataset_name: str) -> None:
         """Drop a dataset in sqlite by detaching the database file
@@ -252,12 +261,22 @@ class SqlalchemyClient(SqlClientBase[Connection]):
         if dataset_name != "main":  # main is the default database, it cannot be detached
             statement = "DETACH DATABASE :name"
             self.execute_sql(statement, name=dataset_name)
+            self._sqlite_attached_datasets.discard(dataset_name)
 
         fn = dbs[dataset_name]
         if not fn:  # It's a memory database, nothing to do
             return
         # Delete the database file
         Path(fn).unlink()
+
+    @contextmanager
+    def with_alternative_dataset_name(
+        self, dataset_name: str
+    ) -> Iterator[SqlClientBase[Connection]]:
+        with super().with_alternative_dataset_name(dataset_name):
+            if self.dialect_name == "sqlite" and dataset_name not in self._sqlite_attached_datasets:
+                self._sqlite_reattach_dataset_if_exists(dataset_name)
+            yield self
 
     def create_dataset(self) -> None:
         if self.dialect_name == "sqlite":
