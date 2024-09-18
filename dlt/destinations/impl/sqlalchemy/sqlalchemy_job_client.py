@@ -26,6 +26,7 @@ from dlt.destinations.impl.sqlalchemy.load_jobs import (
     SqlalchemyJsonLInsertJob,
     SqlalchemyParquetInsertJob,
     SqlalchemyStagingCopyJob,
+    SqlalchemyMergeFollowupJob,
 )
 
 
@@ -93,6 +94,14 @@ class SqlalchemyJobClient(SqlJobClientWithStagingDataset):
                 )
             ]
         return []
+
+    def _create_merge_followup_jobs(
+        self, table_chain: Sequence[PreparedTableSchema]
+    ) -> List[FollowupJobRequest]:
+        # Ensure all tables exist in metadata before generating sql job
+        for table in table_chain:
+            self._to_table_object(table)
+        return [SqlalchemyMergeFollowupJob.from_table_chain(table_chain, self.sql_client)]
 
     def create_load_job(
         self, table: PreparedTableSchema, file_path: str, load_id: str, restore: bool = False
