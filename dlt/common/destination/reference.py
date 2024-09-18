@@ -412,9 +412,7 @@ class HasFollowupJobs:
 class SupportsReadableRelation(Protocol):
     """A readable relation retrieved from a destination that supports it"""
 
-    def df(
-        self, chunk_size: int = None, columns: TTableSchemaColumns = None
-    ) -> Optional[DataFrame]:
+    def df(self, chunk_size: int = None) -> Optional[DataFrame]:
         """Fetches the results as data frame. For large queries the results may be chunked
 
         Fetches the results into a data frame. The default implementation uses helpers in `pandas.io.sql` to generate Pandas data frame.
@@ -430,17 +428,11 @@ class SupportsReadableRelation(Protocol):
         """
         ...
 
-    def arrow(
-        self, chunk_size: int = None, columns: TTableSchemaColumns = None
-    ) -> Optional[ArrowTable]: ...
+    def arrow(self, chunk_size: int = None) -> Optional[ArrowTable]: ...
 
-    def iter_df(
-        self, chunk_size: int, columns: TTableSchemaColumns = None
-    ) -> Generator[DataFrame, None, None]: ...
+    def iter_df(self, chunk_size: int) -> Generator[DataFrame, None, None]: ...
 
-    def iter_arrow(
-        self, chunk_size: int, columns: TTableSchemaColumns = None
-    ) -> Generator[ArrowTable, None, None]: ...
+    def iter_arrow(self, chunk_size: int) -> Generator[ArrowTable, None, None]: ...
 
     def fetchall(self) -> List[Tuple[Any, ...]]: ...
 

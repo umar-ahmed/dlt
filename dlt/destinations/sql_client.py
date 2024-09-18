@@ -320,29 +320,25 @@ class DBApiCursorImpl(DBApiCursor):
     def _get_columns(self) -> List[str]:
         return [c[0] for c in self.native_cursor.description]
 
-    def df(
-        self, chunk_size: int = None, columns: TTableSchemaColumns = None, **kwargs: Any
-    ) -> Optional[DataFrame]:
+    def df(self, chunk_size: int = None, **kwargs: Any) -> Optional[DataFrame]:
         """Fetches results as data frame in full or in specified chunks.
 
         May use native pandas/arrow reader if available. Depending on
         the native implementation chunk size may vary.
         """
         try:
-            return next(self.iter_df(chunk_size=chunk_size, columns=columns))
+            return next(self.iter_df(chunk_size=chunk_size))
         except StopIteration:
             return None
 
-    def arrow(
-        self, chunk_size: int = None, columns: TTableSchemaColumns = None, **kwargs: Any
-    ) -> Optional[ArrowTable]:
+    def arrow(self, chunk_size: int = None, **kwargs: Any) -> Optional[ArrowTable]:
         """Fetches results as data frame in full or in specified chunks.
 
         May use native pandas/arrow reader if available. Depending on
         the native implementation chunk size may vary.
         """
         try:
-            return next(self.iter_arrow(chunk_size=chunk_size, columns=columns))
+            return next(self.iter_arrow(chunk_size=chunk_size))
         except StopIteration:
             return None
 
@@ -352,50 +348,33 @@ class DBApiCursorImpl(DBApiCursor):
                 return
             yield result
 
-    def iter_df(
-        self, chunk_size: int, columns: TTableSchemaColumns = None
-    ) -> Generator[DataFrame, None, None]:
+    def iter_df(self, chunk_size: int) -> Generator[DataFrame, None, None]:
         """Default implementation converts arrow to df"""
         from dlt.common.libs.pandas import pandas as pd
 
-        for table in self.iter_arrow(chunk_size=chunk_size, columns=columns):
+        for table in self.iter_arrow(chunk_size=chunk_size):
             # NOTE: we go via arrow table
             # https://github.com/apache/arrow/issues/38644 for reference on types_mapper
             yield table.to_pandas(types_mapper=pd.ArrowDtype)
 
-    def iter_arrow(
-        self, chunk_size: int, columns: TTableSchemaColumns = None
-    ) -> Generator[ArrowTable, None, None]:
+    def iter_arrow(self, chunk_size: int) -> Generator[ArrowTable, None, None]:
         """Default implementation converts query result to arrow table"""
         from dlt.common.libs.pyarrow import table_schema_columns_to_py_arrow, pyarrow
 
-        def _result_to_arrow_table(
-            result: List[Tuple[Any, ...]], columns: List[str], schema: pyarrow.schema
-        ) -> ArrowTable:
+        def _result_to_arrow_table(result: List[Tuple[Any, ...]], columns: List[str]) -> ArrowTable:
             # TODO: it might be faster to creaty pyarrow arrays and create tables from them
             pylist = [dict(zip(columns, t)) for t in result]
-            return ArrowTable.from_pylist(pylist, schema=schema)
+            return ArrowTable.from_pylist(pylist)
 
         cursor_columns = self._get_columns()
 
-        # we can create the arrow schema if columns are present
-        # TODO: when using this dataset as a source for a new pipeline, we should 
-        # get the capabilities of the destination that it will end up it
-        arrow_schema = (
-            table_schema_columns_to_py_arrow(
-                columns, caps=DestinationCapabilitiesContext.generic_capabilities()
-            )
-            if columns
-            else None
-        )
-
         if not chunk_size:
             result = self.fetchall()
-            yield _result_to_arrow_table(result, cursor_columns, arrow_schema)
+            yield _result_to_arrow_table(result, cursor_columns)
             return
 
         for result in self.iter_fetchmany(chunk_size=chunk_size):
-            yield _result_to_arrow_table(result, cursor_columns, arrow_schema)
+            yield _result_to_arrow_table(result, cursor_columns)
 
 
 def raise_database_error(f: TFun) -> TFun:

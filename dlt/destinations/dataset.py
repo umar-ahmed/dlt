@@ -19,13 +19,11 @@ class ReadableRelation(SupportsReadableRelation):
         client: WithReadableRelations,
         table: str = None,
         query: str = None,
-        columns: TTableSchemaColumns = None
     ) -> None:
         """Create a lazy evaluated relation to for the dataset of a destination"""
         self.client = client
         self.query = query
         self.table = table
-        self.columns = columns
 
     @contextmanager
     def cursor(self) -> Generator[SupportsReadableRelation, Any, Any]:
@@ -33,33 +31,25 @@ class ReadableRelation(SupportsReadableRelation):
         with self.client.table_relation(table=self.table) as cursor:
             yield cursor
 
-    def df(
-        self, chunk_size: int = None, columns: TTableSchemaColumns = None
-    ) -> Optional[DataFrame]:
+    def df(self, chunk_size: int = None) -> Optional[DataFrame]:
         """Get first batch of table as dataframe"""
         with self.cursor() as cursor:
-            return cursor.df(chunk_size=chunk_size, columns=columns or self.columns)
+            return cursor.df(chunk_size=chunk_size)
 
-    def arrow(
-        self, chunk_size: int = None, columns: TTableSchemaColumns = None
-    ) -> Optional[ArrowTable]:
+    def arrow(self, chunk_size: int = None) -> Optional[ArrowTable]:
         """Get first batch of table as arrow table"""
         with self.cursor() as cursor:
-            return cursor.arrow(chunk_size=chunk_size, columns=columns or self.columns)
+            return cursor.arrow(chunk_size=chunk_size)
 
-    def iter_df(
-        self, chunk_size: int, columns: TTableSchemaColumns = None
-    ) -> Generator[DataFrame, None, None]:
+    def iter_df(self, chunk_size: int) -> Generator[DataFrame, None, None]:
         """iterates over the whole table in dataframes of the given chunk_size"""
         with self.cursor() as cursor:
-            yield from cursor.iter_df(chunk_size=chunk_size, columns=columns or self.columns)
+            yield from cursor.iter_df(chunk_size=chunk_size)
 
-    def iter_arrow(
-        self, chunk_size: int, columns: TTableSchemaColumns = None
-    ) -> Generator[ArrowTable, None, None]:
+    def iter_arrow(self, chunk_size: int) -> Generator[ArrowTable, None, None]:
         """iterates over the whole table in arrow tables of the given chunk_size"""
         with self.cursor() as cursor:
-            yield from cursor.iter_arrow(chunk_size=chunk_size, columns=columns or self.columns)
+            yield from cursor.iter_arrow(chunk_size=chunk_size)
 
     def fetchall(self) -> List[Tuple[Any, ...]]:
         """does a dbapi fetch all"""
@@ -94,8 +84,7 @@ class ReadableDataset(SupportsReadableDataset):
 
     def __getitem__(self, table: str) -> SupportsReadableRelation:
         """access of table via dict notation"""
-        table_columns = self.schema.tables[table]["columns"]
-        return ReadableRelation(client=self.client, table=table, columns=table_columns)
+        return ReadableRelation(client=self.client, table=table)
 
     def __getattr__(self, table: str) -> SupportsReadableRelation:
         """access of table via property notation"""
