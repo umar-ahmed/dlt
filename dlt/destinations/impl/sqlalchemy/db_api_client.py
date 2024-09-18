@@ -123,6 +123,8 @@ class SqlalchemyClient(SqlClientBase[Connection]):
         self._current_connection: Optional[Connection] = None
         self._current_transaction: Optional[SqlaTransactionWrapper] = None
         self.metadata = sa.MetaData()
+        # Keep a list of datasets already attached on the current connection
+        self._sqlite_attached_datasets: Set[str] = set()
 
     @property
     def engine(self) -> sa.engine.Engine:
@@ -141,9 +143,6 @@ class SqlalchemyClient(SqlClientBase[Connection]):
     @property
     def dialect_name(self) -> str:
         return self.dialect.name
-
-        # Keep a list of datasets already attached on the current connection
-        self._sqlite_attached_datasets: Set[str] = set()
 
     def open_connection(self) -> Connection:
         if self._current_connection is None:
@@ -351,8 +350,10 @@ class SqlalchemyClient(SqlClientBase[Connection]):
 
     def fully_qualified_dataset_name(self, escape: bool = True, staging: bool = False) -> str:
         if staging:
-            raise NotImplementedError("Staging not supported")
-        return self.dialect.identifier_preparer.format_schema(self.dataset_name)  # type: ignore[attr-defined, no-any-return]
+            dataset_name = self.staging_dataset_name
+        else:
+            dataset_name = self.dataset_name
+        return self.dialect.identifier_preparer.format_schema(dataset_name)  # type: ignore[attr-defined, no-any-return]
 
     def alter_table_add_columns(self, columns: Sequence[sa.Column]) -> None:
         if not columns:
